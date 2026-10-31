@@ -127,7 +127,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          APKS=$(find src -maxdepth 6 -name "*.apk" | tr '\n' ' ')
+          APKS=$(find src/build/app/outputs/apk/release -maxdepth 1 -name "*.apk" | tr '\n' ' ')
           echo "apks: $APKS"
           [ -z "$APKS" ] && { echo "::error::no apk produced"; exit 1; }
           gh release delete "$VERSION" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
