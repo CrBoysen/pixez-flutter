@@ -128,5 +128,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "PixEz $VERSION (R18)" \
             --notes "Upstream: ${UPSTREAM} @ ${SHA}
-Recommend feed filter patched: for_ios -> for_android (R-18 visible)
-Built automatically by GitHub Actions."
+          Recommend feed filter patched: for_ios -> for_android (R-18 visible)
+          Built automatically by GitHub Actions."
