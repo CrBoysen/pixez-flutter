@@ -112,6 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
+          ( cd plugins/rhttp/rhttp && flutter pub get && dart run build_runner build --delete-conflicting-outputs )
           dart run build_runner build --delete-conflicting-outputs
           if [ -f android/key.properties ]; then
             flutter build apk --release --target-platform android-arm64
