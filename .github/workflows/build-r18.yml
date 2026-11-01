@@ -138,7 +138,9 @@ jobs:
           grep -q 'android.builder.sdkDownload' android/gradle.properties 2>/dev/null \
             || echo "android.builder.sdkDownload=true" >> android/gradle.properties
           flutter pub get
-          dart run build_runner build --delete-conflicting-outputs
+          # rhttp 是 path 依赖，其 freezed 代码必须在本包内单独生成，否则 build_runner 不会处理
+          ( cd plugins/rhttp/rhttp && dart run build_runner build )
+          dart run build_runner build
           if [ -f android/key.properties ]; then
             flutter build apk --release --target-platform android-arm64
           else
