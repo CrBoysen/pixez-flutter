@@ -82,8 +82,27 @@ jobs:
       - name: Setup Android SDK / NDK
         if: steps.check.outputs.skip == 'false'
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platforms;android-37" "ndk;28.2.13676358" > /dev/null
+          set -uo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "SDK_ROOT=$SDK_ROOT"
+          SDKM=$(find "$SDK_ROOT" -name sdkmanager -type f 2>/dev/null | head -1 || true)
+          if [ -z "$SDKM" ]; then
+            echo "::error::sdkmanager not found under $SDK_ROOT"
+            find / -maxdepth 6 -name sdkmanager -type f 2>/dev/null | head -5 || true
+            exit 1
+          fi
+          echo "using sdkmanager: $SDKM"
+          yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+          "$SDKM" --install "platform-tools" "ndk;28.2.13676358" > /dev/null || true
+          "$SDKM" --install "platforms;android-37" > /dev/null 2>&1 \
+            || "$SDKM" --install "platforms;android-37.0" > /dev/null 2>&1 || true
+          if [ -d "$SDK_ROOT/platforms/android-37.0" ] && [ ! -e "$SDK_ROOT/platforms/android-37" ]; then
+            ln -s "$SDK_ROOT/platforms/android-37.0" "$SDK_ROOT/platforms/android-37"
+          fi
+          echo "--- platforms ---"; ls -1 "$SDK_ROOT/platforms" || true
+          echo "--- ndk ---"; ls -1 "$SDK_ROOT/ndk" || true
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
 
       - name: Setup Flutter
         if: steps.check.outputs.skip == 'false'
@@ -116,6 +135,8 @@ jobs:
         working-directory: src
         run: |
           set -euo pipefail
+          grep -q 'android.builder.sdkDownload' android/gradle.properties 2>/dev/null \
+            || echo "android.builder.sdkDownload=true" >> android/gradle.properties
           flutter pub get
           dart run build_runner build --delete-conflicting-outputs
           if [ -f android/key.properties ]; then
