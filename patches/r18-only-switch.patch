@@ -1,0 +1,248 @@
+diff --git a/lib/component/illust_card.dart b/lib/component/illust_card.dart
+index 7ec5a0d2..9dc1e3d6 100644
+--- a/lib/component/illust_card.dart
++++ b/lib/component/illust_card.dart
+@@ -78,7 +78,7 @@ class _IllustCardState extends State<IllustCard> {
+ 
+   @override
+   Widget build(BuildContext context) {
+-    if (userSetting.hIsNotAllow)
++    if (userSetting.hIsNotAllow && !_lightingStore.r18Only)
+       for (int i = 0; i < store.illusts!.tags.length; i++) {
+         if (store.illusts!.tags[i].name.startsWith('R-18')) {
+           return InkWell(
+diff --git a/lib/lighting/lighting_store.dart b/lib/lighting/lighting_store.dart
+index 2a6cecf2..6699186a 100644
+--- a/lib/lighting/lighting_store.dart
++++ b/lib/lighting/lighting_store.dart
+@@ -14,6 +14,9 @@
+  *
+  */
+ 
++import 'dart:async';
++import 'dart:math';
++
+ import 'package:dio/dio.dart';
+ import 'package:easy_refresh/easy_refresh.dart';
+ import 'package:mobx/mobx.dart';
+@@ -72,6 +75,15 @@ abstract class _LightingStoreBase with Store {
+   @observable
+   bool refreshing = false;
+ 
++  /// 首页「仅 R-18」开关状态，仅影响本 store 的展示过滤与补量。
++  @observable
++  bool r18Only = false;
++
++  static const int R18_MIN_COUNT = 12;
++  static int r18FillGuard = 2;
++  static List<Illusts>? _r18RankCache;
++  bool _fillingR18 = false;
++
+   GlanceIllustPersistProvider glanceIllustPersistProvider =
+       GlanceIllustPersistProvider();
+ 
+@@ -113,6 +125,62 @@ abstract class _LightingStoreBase with Store {
+ 
+   bool _lock = false;
+ 
++  /// 「仅 R-18」过滤：优先看 xRestrict，其次兼容只打了 R-18 / R-18G 标签的作品。
++  bool acceptR18Only(Illusts illust) {
++    if (!r18Only) return true;
++    if (illust.xRestrict > 0) return true;
++    for (final tag in illust.tags) {
++      if (tag.name.startsWith('R-18')) return true;
++    }
++    return false;
++  }
++
++  /// 先把已过滤的结果交给 UI，再在后台续页 / 补榜单，避免首屏被阻塞。
++  Future<void> fillR18() async {
++    if (!r18Only || _fillingR18) return;
++    _fillingR18 = true;
++    try {
++      // 让出一拍，等 fetch 的 finally 释放 _lock 后再续页
++      await Future<void>.delayed(Duration.zero);
++      int guard = 0;
++      while (r18Only &&
++          iStores.length < R18_MIN_COUNT &&
++          guard < r18FillGuard &&
++          nextUrl != null &&
++          nextUrl!.isNotEmpty) {
++        guard++;
++        await fetchNext();
++      }
++      if (r18Only && iStores.length < R18_MIN_COUNT) {
++        await appendR18Ranking();
++      }
++    } finally {
++      _fillingR18 = false;
++    }
++  }
++
++  Future<void> appendR18Ranking() async {
++    try {
++      _r18RankCache ??= await loadR18Ranking();
++      final exists =
++          iStores.map((e) => e.illusts?.id).whereType<int>().toSet();
++      final fresh = _r18RankCache!
++          .where((e) => !exists.contains(e.id))
++          .map((e) => IllustStore(e.id, e))
++          .toList();
++      if (fresh.isEmpty) return;
++      fresh.shuffle(Random());
++      iStores.addAll(fresh.take(30));
++    } catch (e) {
++      // 补量失败不影响推荐主流展示
++    }
++  }
++
++  Future<List<Illusts>> loadR18Ranking() async {
++    Response response = await apiClient.getIllustRanking("week_r18", null);
++    return Recommend.fromJson(response.data).illusts;
++  }
++
+   @action
+   Future<bool> fetch({String? url, bool force = false}) async {
+     if (_lock) return false;
+@@ -132,7 +200,9 @@ abstract class _LightingStoreBase with Store {
+       //https://app-api.pixiv.net/v1/user/illusts?filter=for_android&user_id=${user_id}&type=illust&offset=30
+       nextUrl = recommend.nextUrl;
+       iStores.clear();
+-      iStores.addAll(recommend.illusts.map((e) => IllustStore(e.id, e)));
++      iStores.addAll(recommend.illusts
++          .where(acceptR18Only)
++          .map((e) => IllustStore(e.id, e)));
+       String? glanceKey = source.glanceKey;
+       refreshing = false;
+       if (glanceKey != null && glanceKey.isNotEmpty) {
+@@ -147,6 +217,9 @@ abstract class _LightingStoreBase with Store {
+         );
+       }
+       easyRefreshController?.finishRefresh(IndicatorResult.success);
++      if (r18Only && iStores.length < R18_MIN_COUNT) {
++        unawaited(fillR18());
++      }
+       return true;
+     } catch (e) {
+       refreshing = false;
+@@ -174,7 +247,9 @@ abstract class _LightingStoreBase with Store {
+         Response result = await apiClient.getNext(nextUrl!);
+         Recommend recommend = Recommend.fromJson(result.data);
+         nextUrl = recommend.nextUrl;
+-        var map = recommend.illusts.map((e) => IllustStore(e.id, e));
++        var map = recommend.illusts
++            .where(acceptR18Only)
++            .map((e) => IllustStore(e.id, e));
+         if (portal == "new") {
+           var iterable = iStores.map((element) => element.id);
+           map = map.where((element) => !iterable.contains(element.id));
+diff --git a/lib/page/hello/recom/recom_spotlight_page.dart b/lib/page/hello/recom/recom_spotlight_page.dart
+index 6ddd10d0..dbc56204 100644
+--- a/lib/page/hello/recom/recom_spotlight_page.dart
++++ b/lib/page/hello/recom/recom_spotlight_page.dart
+@@ -71,6 +71,7 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
+       ApiForceSource(
+           futureGet: (e) => apiClient.getRecommend(), glanceKey: "recom"),
+     )..easyRefreshController = _easyRefreshController;
++    _lightingStore.r18Only = userSetting.r18Only;
+     super.initState();
+     subscription = topStore.topStream.listen((event) {
+       if (event == "100") {
+@@ -85,6 +86,54 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
+     _recomUserStore.fetch();
+   }
+ 
++  Widget _buildR18Switch(BuildContext context) {
++    return Observer(
++      builder: (context) {
++        final on = userSetting.r18Only;
++        final primary = Theme.of(context).colorScheme.primary;
++        final onColor = Theme.of(context).colorScheme.onPrimary;
++        return Padding(
++          padding: const EdgeInsets.only(right: 12.0),
++          child: Center(
++            child: InkWell(
++              borderRadius: BorderRadius.circular(20.0),
++              onTap: _toggleR18Only,
++              child: Container(
++                padding:
++                    const EdgeInsets.symmetric(horizontal: 12.0, vertical: 5.0),
++                decoration: BoxDecoration(
++                  color: on ? primary : Colors.transparent,
++                  borderRadius: BorderRadius.circular(20.0),
++                  border: Border.all(
++                    color: on ? primary : Theme.of(context).dividerColor,
++                  ),
++                ),
++                child: Text(
++                  "仅 R-18",
++                  style: TextStyle(
++                    fontSize: 12.0,
++                    fontWeight: FontWeight.w600,
++                    color: on
++                        ? onColor
++                        : Theme.of(context).textTheme.bodySmall?.color,
++                  ),
++                ),
++              ),
++            ),
++          ),
++        );
++      },
++    );
++  }
++
++  void _toggleR18Only() {
++    final next = !userSetting.r18Only;
++    userSetting.setR18Only(next);
++    _lightingStore.r18Only = next;
++    _lightingStore.iStores.clear();
++    _lightingStore.fetch(force: true);
++  }
++
+   @override
+   Widget build(BuildContext context) {
+     super.build(context);
+@@ -104,6 +153,7 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
+               automaticallyImplyLeading: false,
+               // backgroundColor: Theme.of(context).canvasColor,
+               title: Text(""),
++              actions: [_buildR18Switch(context)],
+             )
+           ],
+           body: ListView(),
+diff --git a/lib/store/user_setting.dart b/lib/store/user_setting.dart
+index d30ba3c9..22ee8036 100644
+--- a/lib/store/user_setting.dart
++++ b/lib/store/user_setting.dart
+@@ -167,6 +167,9 @@ abstract class _UserSetting with Store {
+   bool overSanityLevelFolder = false;
+   @observable
+   bool hIsNotAllow = false;
++
++  @observable
++  bool r18Only = false;
+   @observable
+   bool followAfterStar = false;
+   @observable
+@@ -560,6 +563,7 @@ abstract class _UserSetting with Store {
+     singleFolder = prefs.getBool(SINGLE_FOLDER_KEY) ?? false;
+     displayMode = prefs.getInt('display_mode');
+     hIsNotAllow = prefs.getBool('h_is_not_allow') ?? false;
++    r18Only = prefs.getBool('r18_only') ?? false;
+     pictureQuality = prefs.getInt(PICTURE_QUALITY_KEY) ?? 0;
+     mangaQuality = prefs.getInt(MANGA_QUALITY_KEY) ?? 0;
+     isBangs = prefs.getBool(IS_BANGS_KEY) ?? false;
+@@ -690,6 +694,12 @@ abstract class _UserSetting with Store {
+     hIsNotAllow = value;
+   }
+ 
++  @action
++  setR18Only(bool value) async {
++    await prefs.setBool('r18_only', value);
++    r18Only = value;
++  }
++
+   @action
+   setNetworkMode(NetworkMode value) async {
+     await prefs.setString(API_NETWORK_MODE_KEY, value.code);
