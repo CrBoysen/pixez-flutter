@@ -10,6 +10,8 @@ permissions:
 
 env:
   UPSTREAM: Notsfsssf/pixez-flutter
+  FLUTTER_VERSION: "3.47.9"
+  R18_VERSION: "1.9.90+515"
 
 jobs:
   build:
@@ -22,7 +24,7 @@ jobs:
           fetch-depth: 1
           path: src
 
-      - name: Patch R18 filter + updater endpoint
+      - name: Patch R18 filter + updater endpoint + r18-only switch
         working-directory: src
         run: |
           set -euo pipefail
@@ -40,6 +42,14 @@ jobs:
           sed -i "s#Notsfsssf/pixez-flutter#${SELF_REPO}#g" lib/er/updater.dart lib/page/about/update_page.dart || true
           echo "updater now points to: $(grep -ho "${SELF_REPO}" lib/er/updater.dart | head -1)"
 
+          echo "=== apply r18-only switch patch ==="
+          curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/patches/r18-only-switch.patch" -o /tmp/r18-only-switch.patch
+          git apply --check /tmp/r18-only-switch.patch
+          git apply /tmp/r18-only-switch.patch
+          git status --porcelain
+
+          echo "=== pin version / tagName ==="
+          sed -i -E "s#^version:.*#version: ${R18_VERSION}#" pubspec.yaml
           VER=$(awk '/^version:/{print $2}' pubspec.yaml | cut -d+ -f1)
           echo "version = $VER"
           sed -i -E "s#(tagName[[:space:]]*=[[:space:]]*\")[0-9][^\"]*\"#\1${VER}\"#" lib/constants.dart || true
@@ -72,19 +82,14 @@ jobs:
       - name: Setup Android SDK / NDK
         if: steps.check.outputs.skip == 'false'
         run: |
-          set -uo pipefail
-          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
-          export PATH="$SDK/cmdline-tools/latest/bin:$SDK/cmdline-tools/bin:$SDK/tools/bin:$SDK/platform-tools:$PATH"
-          echo "sdk dir: $SDK"; ls "$SDK" || true
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platform-tools" "platforms;android-36" > /dev/null 2>&1 || echo "::warning::sdkmanager install skipped"
-          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
-          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          sdkmanager "platforms;android-37" "ndk;28.2.13676358" > /dev/null
 
       - name: Setup Flutter
         if: steps.check.outputs.skip == 'false'
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
 
@@ -112,7 +117,6 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
-          ( cd plugins/rhttp/rhttp && flutter pub get && dart run build_runner build --delete-conflicting-outputs )
           dart run build_runner build --delete-conflicting-outputs
           if [ -f android/key.properties ]; then
             flutter build apk --release --target-platform android-arm64
@@ -127,7 +131,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          APKS=$(find src/build/app/outputs/apk/release -maxdepth 1 -name "*.apk" | tr '\n' ' ')
+          APKS=$(find src -maxdepth 6 -name "*.apk" | tr '\n' ' ')
           echo "apks: $APKS"
           [ -z "$APKS" ] && { echo "::error::no apk produced"; exit 1; }
           gh release delete "$VERSION" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
@@ -135,5 +139,6 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "PixEz $VERSION (R18)" \
             --notes "Upstream: ${UPSTREAM} @ ${SHA}
-          Recommend feed filter patched: for_ios -> for_android (R-18 visible)
-          Built automatically by GitHub Actions."
+Recommend feed filter patched: for_ios -> for_android (R-18 visible)
+Home feed: r18-only switch (top-right pill) applied via patches/r18-only-switch.patch
+Built automatically by GitHub Actions."
