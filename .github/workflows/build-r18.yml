@@ -176,7 +176,15 @@ jobs:
           gh release create "$VERSION" $APKS \
             --repo "$GITHUB_REPOSITORY" \
             --title "PixEz $VERSION (R18)" \
-            --notes "Upstream: ${UPSTREAM} @ ${SHA}
-          Recommend feed filter patched: for_ios -> for_android (R-18 visible)
-          Home feed: r18-only switch (top-right pill) applied via patches/r18-only-switch.patch
-          Built automatically by GitHub Actions."
+            --notes "上游代码：Notsfsssf/pixez-flutter @ ${SHA}
+          版本：${VERSION}
+
+          【更新说明】
+          - 推荐流接口过滤参数由 for_ios 改为 for_android，首页与漫画推荐可见 R-18 作品
+          - 首页顶部新增「仅 R-18」胶囊开关，开启后仅展示 R-18 内容，并自动补充 week_r18 榜单作品
+          - 关闭开关时保持原版观感，数据与官方版本一致
+          - 使用前提：pixiv 账号设置与 App 内设置均需开启显示 R18 内容
+
+          【说明】
+          本构建由 Marvis（AI 桌面助手）自动完成：同步上游代码 → 应用 r18-only-switch 补丁 → 编译签名 → 发布。
+          本项目为个人自用 fork，仅用于学习与功能验证，请勿用于商业用途。"
