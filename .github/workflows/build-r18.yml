@@ -11,7 +11,7 @@ permissions:
 env:
   UPSTREAM: Notsfsssf/pixez-flutter
   FLUTTER_VERSION: "3.47.9"
-  R18_VERSION: "1.9.93+518"
+  R18_VERSION: "1.9.94+519"
 
 jobs:
   build:
