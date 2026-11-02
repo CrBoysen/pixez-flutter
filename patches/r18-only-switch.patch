@@ -1,3 +1,4 @@
+warning: in the working copy of 'lib/page/hello/hello_page.dart', LF will be replaced by CRLF the next time Git touches it
 diff --git a/lib/component/illust_card.dart b/lib/component/illust_card.dart
 index 7ec5a0d..9dc1e3d 100644
 --- a/lib/component/illust_card.dart
@@ -187,76 +188,34 @@ index d323193..eea7266 100644
              Visibility(
                visible: false,
 diff --git a/lib/page/hello/hello_page.dart b/lib/page/hello/hello_page.dart
-index 9fc2891..d0a6a16 100644
+index 9fc2891..3f17c1c 100644
 --- a/lib/page/hello/hello_page.dart
 +++ b/lib/page/hello/hello_page.dart
-@@ -46,9 +46,13 @@ class _HelloPageState extends State<HelloPage> {
-   late PageController _pageController;
-   double? bottomNavigatorHeight = null;
-   late List<Widget> _lists;
-+  Timer? _r18LongPressTimer;
-+  Offset? _r18DownPos;
-+  bool _r18LongPressFired = false;
- 
-   @override
-   void dispose() {
-+    _r18LongPressTimer?.cancel();
-     _sub.cancel();
-     _pageController.dispose();
-     super.dispose();
-@@ -174,7 +178,7 @@ class _HelloPageState extends State<HelloPage> {
+@@ -174,7 +174,7 @@ class _HelloPageState extends State<HelloPage> {
              },
              destinations: <NavigationRailDestination>[
                NavigationRailDestination(
 -                icon: Icon(Icons.home),
-+                icon: _wrapR18LongPress(child: Icon(Icons.home)),
++                icon: _r18Tooltip(const Icon(Icons.home)),
                  label: Text(I18n.of(context).home),
                ),
                NavigationRailDestination(
-@@ -231,48 +235,115 @@ class _HelloPageState extends State<HelloPage> {
+@@ -231,6 +231,42 @@ class _HelloPageState extends State<HelloPage> {
      ];
    }
  
-+  /// NavigationBar / NavigationRail 内部的 InkResponse 会在手势竞技场里抢走
-+  /// 长按（Tooltip/InkResponse 的 LongPressGestureRecognizer 先于外层注册），
-+  /// 外层 GestureDetector.onLongPress 收不到回调，因此改用 Listener + Timer
-+  /// 直接监听原始指针事件，绕开竞技场。
-+  Widget _wrapR18LongPress({required Widget child, bool firstSlotOnly = false}) {
-+    return Listener(
-+      behavior: HitTestBehavior.translucent,
-+      onPointerDown: (event) {
-+        _r18LongPressTimer?.cancel();
-+        _r18LongPressTimer = null;
-+        _r18LongPressFired = false;
-+        _r18DownPos = event.localPosition;
-+        if (firstSlotOnly) {
-+          final slotWidth = MediaQuery.of(context).size.width / 5;
-+          if (event.localPosition.dx > slotWidth) return;
-+        }
-+        _r18LongPressTimer = Timer(const Duration(milliseconds: 450), () {
-+          _r18LongPressTimer = null;
-+          if (!mounted || _r18LongPressFired) return;
-+          _r18LongPressFired = true;
-+          _toggleR18Only();
-+        });
-+      },
-+      onPointerMove: (event) {
-+        final downPos = _r18DownPos;
-+        if (downPos != null && (event.localPosition - downPos).distance > 24) {
-+          _r18LongPressTimer?.cancel();
-+          _r18LongPressTimer = null;
-+        }
-+      },
-+      onPointerUp: (_) => _cancelR18LongPress(),
-+      onPointerCancel: (_) => _cancelR18LongPress(),
++  /// 复用「长按底栏图标弹出气泡」这条既有链路来切换「仅 R-18」：
++  /// NavigationBar / NavigationRail 里的 InkResponse 会抢走长按，但 Tooltip 自己
++  /// 注册的 LongPressGestureRecognizer 位于图标层，在手势竞技场里优先胜出
++  /// （默认长按「首页」弹出的那个气泡就是它），所以把 Tooltip 的 onTriggered
++  /// 接到开关上，气泡文案也换成开关说明，不额外增加任何按钮或透明布局。
++  Widget _r18Tooltip(Widget child) {
++    return Tooltip(
++      message: '切换「仅 R-18」',
++      triggerMode: TooltipTriggerMode.longPress,
++      onTriggered: _toggleR18Only,
 +      child: child,
 +    );
-+  }
-+
-+  void _cancelR18LongPress() {
-+    _r18LongPressTimer?.cancel();
-+    _r18LongPressTimer = null;
-+    _r18DownPos = null;
 +  }
 +
 +  /// 长按底栏「首页」切换「仅 R-18」模式
@@ -284,89 +243,16 @@ index 9fc2891..d0a6a16 100644
    Widget _buildNavigationBar(BuildContext context) {
      return ClipRRect(
        child: BackdropFilter(
-         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
--        child: NavigationBar(
--          height: 68,
--          backgroundColor: Theme.of(
--            context,
--          ).colorScheme.surface.withValues(alpha: 0.9),
--          destinations: [
--            NavigationDestination(
+@@ -242,7 +278,8 @@ class _HelloPageState extends State<HelloPage> {
+           ).colorScheme.surface.withValues(alpha: 0.9),
+           destinations: [
+             NavigationDestination(
 -              icon: Icon(Icons.home),
--              label: I18n.of(context).home,
--            ),
--            NavigationDestination(
--              icon: Icon(Icons.leaderboard),
--              label: I18n.of(context).rank,
--            ),
--            NavigationDestination(
--              icon: Icon(Icons.favorite),
--              label: I18n.of(context).quick_view,
--            ),
--            NavigationDestination(
--              icon: Icon(Icons.search),
--              label: I18n.of(context).search,
--            ),
--            NavigationDestination(
--              icon: Icon(Icons.more_horiz),
--              label: I18n.of(context).more,
--            ),
--          ],
--          selectedIndex: index,
--          onDestinationSelected: (value) {
--            HapticUtil.selectionClick();
--            if (this.index == value) {
--              topStore.setTop("${value + 1}00");
--            }
--            setState(() {
--              this.index = value;
--            });
--            if (_pageController.hasClients) _pageController.jumpToPage(value);
--          },
-+        child: _wrapR18LongPress(
-+          firstSlotOnly: true,
-+          child: NavigationBar(
-+            height: 68,
-+            backgroundColor: Theme.of(
-+              context,
-+            ).colorScheme.surface.withValues(alpha: 0.9),
-+            destinations: [
-+              NavigationDestination(
-+                icon: Icon(Icons.home),
-+                label: I18n.of(context).home,
-+              ),
-+              NavigationDestination(
-+                icon: Icon(Icons.leaderboard),
-+                label: I18n.of(context).rank,
-+              ),
-+              NavigationDestination(
-+                icon: Icon(Icons.favorite),
-+                label: I18n.of(context).quick_view,
-+              ),
-+              NavigationDestination(
-+                icon: Icon(Icons.search),
-+                label: I18n.of(context).search,
-+              ),
-+              NavigationDestination(
-+                icon: Icon(Icons.more_horiz),
-+                label: I18n.of(context).more,
-+              ),
-+            ],
-+            selectedIndex: index,
-+            onDestinationSelected: (value) {
-+              HapticUtil.selectionClick();
-+              if (this.index == value) {
-+                topStore.setTop("${value + 1}00");
-+              }
-+              setState(() {
-+                this.index = value;
-+              });
-+              if (_pageController.hasClients) _pageController.jumpToPage(value);
-+            },
-+          ),
-         ),
-       ),
-     );
++              tooltip: '',
++              icon: _r18Tooltip(const Icon(Icons.home)),
+               label: I18n.of(context).home,
+             ),
+             NavigationDestination(
 diff --git a/lib/page/hello/recom/recom_spotlight_page.dart b/lib/page/hello/recom/recom_spotlight_page.dart
 index 6ddd10d..a091aad 100644
 --- a/lib/page/hello/recom/recom_spotlight_page.dart
