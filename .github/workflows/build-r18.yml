@@ -154,7 +154,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          rm -rf dist && mkdir -p dist
+          rm -rf dist keep && mkdir -p dist keep
           add_apk() {
             b=$(basename "$1")
             [ -f "dist/$b" ] && return 0
@@ -167,8 +167,17 @@ jobs:
           fi
           find src -maxdepth 6 -name '*.apk' -print0 2>/dev/null \
             | while IFS= read -r -d '' f; do add_apk "$f"; done || true
-          ls -l dist
-          APKS=$(find dist -maxdepth 1 -name '*.apk' | sort | tr '\n' ' ')
+          echo "== raw apks =="; ls -l dist
+          # app-release.apk is the same universal build; use it as universal if the explicit one is missing
+          if [ ! -f dist/app-universal-release.apk ] && [ -f dist/app-release.apk ]; then
+            cp -f dist/app-release.apk dist/app-universal-release.apk
+          fi
+          # keep only: arm64-v8a, armeabi-v7a, x86_64, universal
+          for b in app-arm64-v8a-release.apk app-armeabi-v7a-release.apk app-x86_64-release.apk app-universal-release.apk; do
+            if [ -f "dist/$b" ]; then mv -f "dist/$b" "keep/$b"; else echo "::warning::$b not produced in this build"; fi
+          done
+          echo "== released apks =="; ls -l keep
+          APKS=$(find keep -maxdepth 1 -name '*.apk' | sort | tr '\n' ' ')
           echo "apks: $APKS"
           [ -z "$APKS" ] && { echo "::error::no apk produced"; exit 1; }
           gh release delete "$VERSION" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
@@ -184,6 +193,9 @@ jobs:
           - 首页顶部新增「仅 R-18」胶囊开关，开启后仅展示 R-18 内容，并自动补充 week_r18 榜单作品
           - 关闭开关时保持原版观感，数据与官方版本一致
           - 使用前提：pixiv 账号设置与 App 内设置均需开启显示 R18 内容
+
+          【产物说明】
+          仅提供 4 个安装包：app-arm64-v8a-release.apk（arm64 设备，推荐）、app-armeabi-v7a-release.apk（32 位 arm）、app-x86_64-release.apk（模拟器）、app-universal-release.apk（通用全架构）。
 
           【说明】
           本构建由 Marvis（AI 桌面助手）自动完成：同步上游代码 → 应用 r18-only-switch 补丁 → 编译签名 → 发布。
