@@ -1,4 +1,3 @@
-warning: in the working copy of 'lib/page/hello/hello_page.dart', LF will be replaced by CRLF the next time Git touches it
 diff --git a/lib/component/illust_card.dart b/lib/component/illust_card.dart
 index 7ec5a0d..9dc1e3d 100644
 --- a/lib/component/illust_card.dart
@@ -137,6 +136,21 @@ index 2a6cecf..6699186 100644
          if (portal == "new") {
            var iterable = iStores.map((element) => element.id);
            map = map.where((element) => !iterable.contains(element.id));
+diff --git a/lib/main.dart b/lib/main.dart
+index 5461118..be00d6c 100644
+--- a/lib/main.dart
++++ b/lib/main.dart
+@@ -64,6 +64,10 @@ final SplashStore splashStore = SplashStore();
+ final Fetcher fetcher = new Fetcher();
+ final FullScreenStore fullScreenStore = FullScreenStore();
+ 
++/// 首页右下角「仅 R-18」胶囊的显隐状态：手指上滑（继续往下浏览推荐流）时收起，
++/// 手指下滑（往回浏览）时重新露出。滚动方写入，HelloPage 读并渲染。
++final ValueNotifier<bool> r18CapsuleVisible = ValueNotifier<bool>(true);
++
+ main(List<String> args) async {
+   await Rhttp.init();
+   await MmapCache.init();
 diff --git a/lib/page/about/about_page.dart b/lib/page/about/about_page.dart
 index d323193..eea7266 100644
 --- a/lib/page/about/about_page.dart
@@ -188,73 +202,126 @@ index d323193..eea7266 100644
              Visibility(
                visible: false,
 diff --git a/lib/page/hello/hello_page.dart b/lib/page/hello/hello_page.dart
-index 9fc2891..3f17c1c 100644
+index 9fc2891..f9c102c 100644
 --- a/lib/page/hello/hello_page.dart
 +++ b/lib/page/hello/hello_page.dart
-@@ -174,7 +174,7 @@ class _HelloPageState extends State<HelloPage> {
-             },
-             destinations: <NavigationRailDestination>[
-               NavigationRailDestination(
--                icon: Icon(Icons.home),
-+                icon: _r18Tooltip(const Icon(Icons.home)),
-                 label: Text(I18n.of(context).home),
-               ),
-               NavigationRailDestination(
-@@ -231,6 +231,42 @@ class _HelloPageState extends State<HelloPage> {
+@@ -128,10 +128,22 @@ class _HelloPageState extends State<HelloPage> {
+       builder: (context, constraints) {
+         final wide = constraints.maxWidth > constraints.maxHeight;
+         return Scaffold(
+-          body: Row(
++          body: Stack(
+             children: <Widget>[
+-              if (wide) ..._buildRail(context),
+-              Expanded(child: _buildPageView(context)),
++              Row(
++                children: <Widget>[
++                  if (wide) ..._buildRail(context),
++                  Expanded(child: _buildPageView(context)),
++                ],
++              ),
++              if (index == 0)
++                Positioned(
++                  right: 12,
++                  bottom: bottomNavigatorHeight! -
++                      MediaQuery.of(context).padding.bottom +
++                      12,
++                  child: _buildR18Capsule(context),
++                ),
+             ],
+           ),
+           extendBody: true,
+@@ -231,6 +243,80 @@ class _HelloPageState extends State<HelloPage> {
      ];
    }
  
-+  /// 复用「长按底栏图标弹出气泡」这条既有链路来切换「仅 R-18」：
-+  /// NavigationBar / NavigationRail 里的 InkResponse 会抢走长按，但 Tooltip 自己
-+  /// 注册的 LongPressGestureRecognizer 位于图标层，在手势竞技场里优先胜出
-+  /// （默认长按「首页」弹出的那个气泡就是它），所以把 Tooltip 的 onTriggered
-+  /// 接到开关上，气泡文案也换成开关说明，不额外增加任何按钮或透明布局。
-+  Widget _r18Tooltip(Widget child) {
-+    return Tooltip(
-+      message: '切换「仅 R-18」',
-+      triggerMode: TooltipTriggerMode.longPress,
-+      onTriggered: _toggleR18Only,
-+      child: child,
++  /// 屏幕右下角置顶的「仅 R-18」小胶囊：单击切换开关，
++  /// 显隐完全交给 [r18CapsuleVisible]，不额外占用底栏或标题栏位置。
++  /// 隐藏时用位移+透明度双重收起，并屏蔽点击，避免误触。
++  Widget _buildR18Capsule(BuildContext context) {
++    return ValueListenableBuilder<bool>(
++      valueListenable: r18CapsuleVisible,
++      builder: (context, visible, child) {
++        return AnimatedSlide(
++          duration: const Duration(milliseconds: 220),
++          curve: Curves.easeOutCubic,
++          offset: visible ? Offset.zero : const Offset(0, 1.8),
++          child: AnimatedOpacity(
++            duration: const Duration(milliseconds: 180),
++            opacity: visible ? 1.0 : 0.0,
++            child: IgnorePointer(
++              ignoring: !visible,
++              child: Observer(
++                builder: (context) {
++                  final on = userSetting.r18Only;
++                  final scheme = Theme.of(context).colorScheme;
++                  final fg = on ? scheme.onPrimary : scheme.onSurfaceVariant;
++                  return Material(
++                    color: on
++                        ? scheme.primary
++                        : scheme.surfaceContainerHighest
++                            .withValues(alpha: 0.92),
++                    elevation: 4,
++                    borderRadius: BorderRadius.circular(22),
++                    child: InkWell(
++                      borderRadius: BorderRadius.circular(22),
++                      onTap: _toggleR18Only,
++                      child: Padding(
++                        padding: const EdgeInsets.symmetric(
++                          horizontal: 12,
++                          vertical: 7,
++                        ),
++                        child: Row(
++                          mainAxisSize: MainAxisSize.min,
++                          children: <Widget>[
++                            Icon(
++                              on ? Icons.visibility : Icons.visibility_off,
++                              size: 15,
++                              color: fg,
++                            ),
++                            const SizedBox(width: 5),
++                            Text(
++                              'R-18',
++                              style: TextStyle(
++                                fontSize: 11,
++                                fontWeight: FontWeight.w600,
++                                color: fg,
++                              ),
++                            ),
++                          ],
++                        ),
++                      ),
++                    ),
++                  );
++                },
++              ),
++            ),
++          ),
++        );
++      },
 +    );
 +  }
 +
-+  /// 长按底栏「首页」切换「仅 R-18」模式
++  /// 胶囊开关：翻转「仅 R-18」，推荐流由 RecomSpolightPage 里的 reaction 自动重载。
 +  void _toggleR18Only() {
 +    final next = !userSetting.r18Only;
 +    userSetting.setR18Only(next);
 +    HapticUtil.medium();
-+    if (this.index != 0) {
-+      if (_pageController.hasClients) _pageController.jumpToPage(0);
-+      setState(() {
-+        this.index = 0;
-+      });
-+    }
-+    final messenger = ScaffoldMessenger.maybeOf(context);
-+    messenger?.hideCurrentSnackBar();
-+    messenger?.showSnackBar(
-+      SnackBar(
-+        content: Text(next ? "仅 R-18：已开启" : "仅 R-18：已关闭"),
-+        duration: const Duration(seconds: 2),
-+        behavior: SnackBarBehavior.floating,
-+      ),
-+    );
 +  }
 +
    Widget _buildNavigationBar(BuildContext context) {
      return ClipRRect(
        child: BackdropFilter(
-@@ -242,7 +278,8 @@ class _HelloPageState extends State<HelloPage> {
-           ).colorScheme.surface.withValues(alpha: 0.9),
-           destinations: [
-             NavigationDestination(
--              icon: Icon(Icons.home),
-+              tooltip: '',
-+              icon: _r18Tooltip(const Icon(Icons.home)),
-               label: I18n.of(context).home,
-             ),
-             NavigationDestination(
+@@ -283,6 +369,7 @@ class _HelloPageState extends State<HelloPage> {
+       itemCount: 5,
+       controller: _pageController,
+       onPageChanged: (index) {
++        r18CapsuleVisible.value = true;
+         setState(() {
+           this.index = index;
+         });
 diff --git a/lib/page/hello/recom/recom_spotlight_page.dart b/lib/page/hello/recom/recom_spotlight_page.dart
-index 6ddd10d..a091aad 100644
+index 6ddd10d..746ebd2 100644
 --- a/lib/page/hello/recom/recom_spotlight_page.dart
 +++ b/lib/page/hello/recom/recom_spotlight_page.dart
 @@ -20,6 +20,7 @@ import 'dart:math';
@@ -284,7 +351,7 @@ index 6ddd10d..a091aad 100644
            futureGet: (e) => apiClient.getRecommend(), glanceKey: "recom"),
      )..easyRefreshController = _easyRefreshController;
 +    _lightingStore.r18Only = userSetting.r18Only;
-+    // 长按底栏「首页」切换 r18Only 后，这里同步过滤并重载推荐流
++    // 右下角胶囊切换「仅 R-18」后，这里同步过滤并重载推荐流
 +    _r18Reaction = reaction<bool>((_) => userSetting.r18Only, (value) {
 +      if (!mounted || _lightingStore.r18Only == value) return;
 +      _lightingStore.r18Only = value;
@@ -301,6 +368,41 @@ index 6ddd10d..a091aad 100644
      super.initState();
      subscription = topStore.topStream.listen((event) {
        if (event == "100") {
+@@ -139,6 +157,7 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
+             backToTopVisible = !backToTopVisible;
+           });
+         }
++        _syncR18Capsule(notification);
+         return true;
+       },
+       child: CustomScrollView(
+@@ -163,6 +182,26 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
+     );
+   }
+ 
++  /// 按手指滑动方向控制右下角「仅 R-18」胶囊的显隐：
++  /// 手指上滑（推荐流继续往下走）时收起，手指下滑（往回浏览）时露出。
++  /// 只认 dragDetails 上的手指位移，惯性滚动与程序化跳转不会误触发。
++  void _syncR18Capsule(ScrollNotification notification) {
++    if (notification.metrics.axis != Axis.vertical) return;
++    DragUpdateDetails? details;
++    if (notification is ScrollUpdateNotification) {
++      details = notification.dragDetails;
++    } else if (notification is OverscrollNotification) {
++      details = notification.dragDetails;
++    }
++    final dy = details?.delta.dy;
++    if (dy == null) return;
++    if (dy > 2.0) {
++      r18CapsuleVisible.value = true;
++    } else if (dy < -2.0) {
++      r18CapsuleVisible.value = false;
++    }
++  }
++
+   int _buildSliderValue(BuildContext context, Orientation orientation) {
+     final currentValue = (orientation == Orientation.portrait
+             ? userSetting.crossAdapterWidth
 diff --git a/lib/store/user_setting.dart b/lib/store/user_setting.dart
 index d30ba3c..22ee803 100644
 --- a/lib/store/user_setting.dart
