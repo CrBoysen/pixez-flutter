@@ -11,6 +11,69 @@ index 7ec5a0d..9dc1e3d 100644
        for (int i = 0; i < store.illusts!.tags.length; i++) {
          if (store.illusts!.tags[i].name.startsWith('R-18')) {
            return InkWell(
+diff --git a/lib/constants.dart b/lib/constants.dart
+index 256807e..f12229c 100644
+--- a/lib/constants.dart
++++ b/lib/constants.dart
+@@ -18,7 +18,7 @@ import 'dart:io';
+ 
+ class Constants {
+   static const String no_h = 'assets/images/h_long.jpg';
+-  static String tagName = "0.9.113";
++  static String tagName = "1.9.95";
+   static const isGooglePlay = bool.fromEnvironment(
+     "IS_GOOGLEPLAY",
+     defaultValue: false,
+diff --git a/lib/er/updater.dart b/lib/er/updater.dart
+index 26496f0..7af2624 100644
+--- a/lib/er/updater.dart
++++ b/lib/er/updater.dart
+@@ -11,7 +11,7 @@ class Updater {
+ 
+   static Future<Result> check() async {
+     if (Constants.isGooglePlay) return Result.no;
+-    final result = await compute(checkUpdate, "");
++    final result = await compute(checkUpdate, Constants.tagName);
+     Updater.result = result;
+     return result;
+   }
+@@ -22,13 +22,18 @@ Future<Result> checkUpdate(String arg) async {
+   try {
+     Response response =
+         await Dio(BaseOptions(baseUrl: 'https://api.github.com'))
+-            .get('/repos/Notsfsssf/pixez-flutter/releases/latest');
+-    String tagName = response.data['tag_name'];
++            .get('/repos/CrBoysen/pixez-flutter/releases/latest');
++    String tagName = response.data['tag_name']?.toString() ?? '';
++    if (tagName.startsWith('v') || tagName.startsWith('V')) {
++      tagName = tagName.substring(1);
++    }
++    tagName = tagName.split('+').first;
++    String localVersion = arg.split('+').first;
+     Updater.latestVersion = tagName;
+-    LPrinter.d("tagName:$tagName ");
+-    if (tagName != Constants.tagName) {
++    LPrinter.d("tagName:$tagName local:$localVersion");
++    if (tagName != localVersion) {
+       List<String> remoteList = tagName.split(".");
+-      List<String> localList = Constants.tagName.split(".");
++      List<String> localList = localVersion.split(".");
+       LPrinter.d("r:$remoteList l$localList");
+       if (remoteList.length != localList.length) return Result.yes;
+       for (var i = 0; i < remoteList.length; i++) {
+diff --git a/lib/fluent/page/about/update_page.dart b/lib/fluent/page/about/update_page.dart
+index 543916f..fef7223 100644
+--- a/lib/fluent/page/about/update_page.dart
++++ b/lib/fluent/page/about/update_page.dart
+@@ -40,7 +40,7 @@ class _UpdatePageState extends State<UpdatePage> {
+   initData() async {
+     try {
+       Response response = await _dio.get(
+-        'https://api.github.com/repos/Notsfsssf/pixez-flutter/releases/latest',
++        'https://api.github.com/repos/CrBoysen/pixez-flutter/releases/latest',
+       );
+       final result = LastRelease.fromJson(response.data);
+       setState(() {
 diff --git a/lib/lighting/lighting_store.dart b/lib/lighting/lighting_store.dart
 index 2a6cecf..6699186 100644
 --- a/lib/lighting/lighting_store.dart
@@ -137,10 +200,18 @@ index 2a6cecf..6699186 100644
            var iterable = iStores.map((element) => element.id);
            map = map.where((element) => !iterable.contains(element.id));
 diff --git a/lib/main.dart b/lib/main.dart
-index 5461118..be00d6c 100644
+index 5461118..7686b4e 100644
 --- a/lib/main.dart
 +++ b/lib/main.dart
-@@ -64,6 +64,10 @@ final SplashStore splashStore = SplashStore();
+@@ -24,6 +24,7 @@ import 'package:flutter/scheduler.dart';
+ import 'package:flutter/services.dart';
+ import 'package:flutter_mobx/flutter_mobx.dart';
+ import 'package:hooks_riverpod/hooks_riverpod.dart';
++import 'package:package_info_plus/package_info_plus.dart';
+ import 'package:path_provider/path_provider.dart';
+ import 'package:pixez/constants.dart';
+ import 'package:pixez/er/fetcher.dart';
+@@ -64,10 +65,18 @@ final SplashStore splashStore = SplashStore();
  final Fetcher fetcher = new Fetcher();
  final FullScreenStore fullScreenStore = FullScreenStore();
  
@@ -151,6 +222,14 @@ index 5461118..be00d6c 100644
  main(List<String> args) async {
    await Rhttp.init();
    await MmapCache.init();
+   WidgetsFlutterBinding.ensureInitialized();
++  try {
++    final _packageInfo = await PackageInfo.fromPlatform();
++    Constants.tagName = _packageInfo.version;
++  } catch (_) {}
+ 
+   if (Platform.isWindows || Platform.isLinux) {
+     // sqflite ffi init
 diff --git a/lib/page/about/about_page.dart b/lib/page/about/about_page.dart
 index d323193..eea7266 100644
 --- a/lib/page/about/about_page.dart
@@ -201,42 +280,50 @@ index d323193..eea7266 100644
              ],
              Visibility(
                visible: false,
+diff --git a/lib/page/about/update_page.dart b/lib/page/about/update_page.dart
+index 23b0afa..77f8fd0 100644
+--- a/lib/page/about/update_page.dart
++++ b/lib/page/about/update_page.dart
+@@ -40,7 +40,7 @@ class _UpdatePageState extends State<UpdatePage> {
+   initData() async {
+     try {
+       Response response = await _dio.get(
+-        'https://api.github.com/repos/Notsfsssf/pixez-flutter/releases/latest',
++        'https://api.github.com/repos/CrBoysen/pixez-flutter/releases/latest',
+       );
+       final result = LastRelease.fromJson(response.data);
+       setState(() {
 diff --git a/lib/page/hello/hello_page.dart b/lib/page/hello/hello_page.dart
-index 9fc2891..f9c102c 100644
+index 9fc2891..071d6b1 100644
 --- a/lib/page/hello/hello_page.dart
 +++ b/lib/page/hello/hello_page.dart
-@@ -128,10 +128,22 @@ class _HelloPageState extends State<HelloPage> {
-       builder: (context, constraints) {
-         final wide = constraints.maxWidth > constraints.maxHeight;
-         return Scaffold(
--          body: Row(
-+          body: Stack(
-             children: <Widget>[
--              if (wide) ..._buildRail(context),
--              Expanded(child: _buildPageView(context)),
-+              Row(
-+                children: <Widget>[
-+                  if (wide) ..._buildRail(context),
-+                  Expanded(child: _buildPageView(context)),
-+                ],
-+              ),
-+              if (index == 0)
-+                Positioned(
-+                  right: 12,
-+                  bottom: bottomNavigatorHeight! -
-+                      MediaQuery.of(context).padding.bottom +
-+                      12,
-+                  child: _buildR18Capsule(context),
-+                ),
+@@ -134,6 +134,8 @@ class _HelloPageState extends State<HelloPage> {
+               Expanded(child: _buildPageView(context)),
              ],
            ),
++          floatingActionButton: _buildR18Fab(context),
++          floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
            extendBody: true,
-@@ -231,6 +243,80 @@ class _HelloPageState extends State<HelloPage> {
+           bottomNavigationBar: wide
+               ? null
+@@ -231,6 +233,98 @@ class _HelloPageState extends State<HelloPage> {
      ];
    }
  
-+  /// 屏幕右下角置顶的「仅 R-18」小胶囊：单击切换开关，
-+  /// 显隐完全交给 [r18CapsuleVisible]，不额外占用底栏或标题栏位置。
++  /// 首页右下角的「仅 R-18」胶囊：挂在 Scaffold 的 FAB 槽位，位置由
++  /// [FloatingActionButtonLocation.endFloat] 保证——底栏之上、右下角、浮在内容之上。
++  /// 只在首页显示，全屏看图时让位，避免挡住画面。
++  Widget? _buildR18Fab(BuildContext context) {
++    if (index != 0) return null;
++    return Observer(
++      builder: (context) {
++        if (fullScreenStore.fullscreen) return const SizedBox.shrink();
++        return _buildR18Capsule(context);
++      },
++    );
++  }
++
++  /// 胶囊本体：单击切换「仅 R-18」，显隐交给 [r18CapsuleVisible]。
 +  /// 隐藏时用位移+透明度双重收起，并屏蔽点击，避免误触。
 +  Widget _buildR18Capsule(BuildContext context) {
 +    return ValueListenableBuilder<bool>(
@@ -245,7 +332,7 @@ index 9fc2891..f9c102c 100644
 +        return AnimatedSlide(
 +          duration: const Duration(milliseconds: 220),
 +          curve: Curves.easeOutCubic,
-+          offset: visible ? Offset.zero : const Offset(0, 1.8),
++          offset: visible ? Offset.zero : const Offset(0, 2.2),
 +          child: AnimatedOpacity(
 +            duration: const Duration(milliseconds: 180),
 +            opacity: visible ? 1.0 : 0.0,
@@ -255,36 +342,42 @@ index 9fc2891..f9c102c 100644
 +                builder: (context) {
 +                  final on = userSetting.r18Only;
 +                  final scheme = Theme.of(context).colorScheme;
-+                  final fg = on ? scheme.onPrimary : scheme.onSurfaceVariant;
++                  final fg = on ? scheme.onPrimary : scheme.onSurface;
 +                  return Material(
 +                    color: on
 +                        ? scheme.primary
 +                        : scheme.surfaceContainerHighest
-+                            .withValues(alpha: 0.92),
-+                    elevation: 4,
-+                    borderRadius: BorderRadius.circular(22),
++                            .withValues(alpha: 0.96),
++                    elevation: 8,
++                    shadowColor: Colors.black54,
++                    shape: RoundedRectangleBorder(
++                      borderRadius: BorderRadius.circular(24),
++                      side: on
++                          ? BorderSide.none
++                          : BorderSide(color: scheme.outline, width: 1),
++                    ),
 +                    child: InkWell(
-+                      borderRadius: BorderRadius.circular(22),
++                      borderRadius: BorderRadius.circular(24),
 +                      onTap: _toggleR18Only,
 +                      child: Padding(
 +                        padding: const EdgeInsets.symmetric(
-+                          horizontal: 12,
-+                          vertical: 7,
++                          horizontal: 14,
++                          vertical: 9,
 +                        ),
 +                        child: Row(
 +                          mainAxisSize: MainAxisSize.min,
 +                          children: <Widget>[
 +                            Icon(
 +                              on ? Icons.visibility : Icons.visibility_off,
-+                              size: 15,
++                              size: 16,
 +                              color: fg,
 +                            ),
-+                            const SizedBox(width: 5),
++                            const SizedBox(width: 6),
 +                            Text(
-+                              'R-18',
++                              on ? '仅 R-18' : 'R-18 关',
 +                              style: TextStyle(
-+                                fontSize: 11,
-+                                fontWeight: FontWeight.w600,
++                                fontSize: 12,
++                                fontWeight: FontWeight.w700,
 +                                color: fg,
 +                              ),
 +                            ),
@@ -312,7 +405,7 @@ index 9fc2891..f9c102c 100644
    Widget _buildNavigationBar(BuildContext context) {
      return ClipRRect(
        child: BackdropFilter(
-@@ -283,6 +369,7 @@ class _HelloPageState extends State<HelloPage> {
+@@ -283,6 +377,7 @@ class _HelloPageState extends State<HelloPage> {
        itemCount: 5,
        controller: _pageController,
        onPageChanged: (index) {
