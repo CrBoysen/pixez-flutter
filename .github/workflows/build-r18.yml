@@ -28,27 +28,30 @@ jobs:
         working-directory: src
         run: |
           set -euo pipefail
-          FILE=lib/network/api_client.dart
-          BEFORE=$(grep -c 'recommended?filter=for_ios' "$FILE" || true)
-          echo "found for_ios occurrences: $BEFORE"
-          sed -i 's#/v1/illust/recommended?filter=for_ios#/v1/illust/recommended?filter=for_android#g; s#/v1/manga/recommended?filter=for_ios#/v1/manga/recommended?filter=for_android#g' "$FILE"
-          if grep -q 'recommended?filter=for_ios' "$FILE"; then
-            echo "::error::patch failed, upstream code changed"
-            exit 1
-          fi
-          grep -n 'recommended?filter=for_android' "$FILE"
 
-          SELF_REPO="${GITHUB_REPOSITORY}"
-          sed -i "s#Notsfsssf/pixez-flutter#${SELF_REPO}#g" lib/er/updater.dart lib/page/about/update_page.dart || true
-          echo "updater now points to: $(grep -ho "${SELF_REPO}" lib/er/updater.dart | head -1)"
-
-          echo "=== apply r18-only switch patch ==="
+          echo "=== 1) apply r18-only switch patch on clean upstream ==="
           curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/patches/r18-only-switch.patch" -o /tmp/r18-only-switch.patch
           git apply --check /tmp/r18-only-switch.patch
           git apply /tmp/r18-only-switch.patch
           git status --porcelain
 
-          echo "=== pin version / tagName ==="
+          echo "=== 2) R18 filter: for_ios -> for_android ==="
+          FILE=lib/network/api_client.dart
+          BEFORE=$(grep -c 'recommended?filter=for_ios' "$FILE" || true)
+          echo "found for_ios occurrences: $BEFORE"
+          sed -i 's#/v1/illust/recommended?filter=for_ios#/v1/illust/recommended?filter=for_android#g; s#/v1/manga/recommended?filter=for_ios#/v1/manga/recommended?filter=for_android#g' "$FILE"
+          if grep -q 'recommended?filter=for_ios' "$FILE"; then
+            echo "::error::filter patch failed, upstream code changed"
+            exit 1
+          fi
+          grep -n 'recommended?filter=for_android' "$FILE"
+
+          echo "=== 3) point updater to self repo ==="
+          SELF_REPO="${GITHUB_REPOSITORY}"
+          grep -rl 'Notsfsssf/pixez-flutter' lib | xargs -r sed -i "s#Notsfsssf/pixez-flutter#${SELF_REPO}#g" || true
+          echo "updater now points to: $(grep -ho "${SELF_REPO}" lib/er/updater.dart | head -1 || true)"
+
+          echo "=== 4) pin version / tagName ==="
           sed -i -E "s#^version:.*#version: ${R18_VERSION}#" pubspec.yaml
           VER=$(awk '/^version:/{print $2}' pubspec.yaml | cut -d+ -f1)
           echo "version = $VER"
