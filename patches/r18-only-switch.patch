@@ -1,5 +1,5 @@
 diff --git a/lib/component/illust_card.dart b/lib/component/illust_card.dart
-index 7ec5a0d2..9dc1e3d6 100644
+index 7ec5a0d..9dc1e3d 100644
 --- a/lib/component/illust_card.dart
 +++ b/lib/component/illust_card.dart
 @@ -78,7 +78,7 @@ class _IllustCardState extends State<IllustCard> {
@@ -12,7 +12,7 @@ index 7ec5a0d2..9dc1e3d6 100644
          if (store.illusts!.tags[i].name.startsWith('R-18')) {
            return InkWell(
 diff --git a/lib/lighting/lighting_store.dart b/lib/lighting/lighting_store.dart
-index 2a6cecf2..6699186a 100644
+index 2a6cecf..6699186 100644
 --- a/lib/lighting/lighting_store.dart
 +++ b/lib/lighting/lighting_store.dart
 @@ -14,6 +14,9 @@
@@ -136,83 +136,238 @@ index 2a6cecf2..6699186a 100644
          if (portal == "new") {
            var iterable = iStores.map((element) => element.id);
            map = map.where((element) => !iterable.contains(element.id));
+diff --git a/lib/page/about/about_page.dart b/lib/page/about/about_page.dart
+index d323193..eea7266 100644
+--- a/lib/page/about/about_page.dart
++++ b/lib/page/about/about_page.dart
+@@ -254,7 +254,7 @@ class _AboutPageState extends State<AboutPage> {
+               ListTile(
+                 leading: Icon(Icons.device_hub),
+                 title: Text(I18n.of(context).repo_address),
+-                subtitle: Text('github.com/Notsfsssf/pixez-flutter'),
++                subtitle: Text('github.com/CrBoysen/pixez-flutter'),
+                 trailing: Visibility(
+                   child: NewVersionChip(),
+                   visible: hasNewVersion,
+@@ -281,7 +281,7 @@ class _AboutPageState extends State<AboutPage> {
+                                 onTap: () {
+                                   try {
+                                     launchUrlString(
+-                                      'https://github.com/Notsfsssf/pixez-flutter',
++                                      'https://github.com/CrBoysen/pixez-flutter',
+                                     );
+                                   } catch (e) {}
+                                 },
+@@ -290,7 +290,7 @@ class _AboutPageState extends State<AboutPage> {
+                                   onPressed: () {
+                                     try {
+                                       launchUrlString(
+-                                        'https://github.com/Notsfsssf/pixez-flutter',
++                                        'https://github.com/CrBoysen/pixez-flutter',
+                                       );
+                                     } catch (e) {}
+                                   },
+@@ -325,6 +325,18 @@ class _AboutPageState extends State<AboutPage> {
+                     );
+                 },
+               ),
++              ListTile(
++                leading: Icon(Icons.link),
++                title: Text('原项目地址'),
++                subtitle: Text('github.com/Notsfsssf/pixez-flutter'),
++                onTap: () async {
++                  try {
++                    await launchUrlString(
++                      'https://github.com/Notsfsssf/pixez-flutter',
++                    );
++                  } catch (e) {}
++                },
++              ),
+             ],
+             Visibility(
+               visible: false,
+diff --git a/lib/page/hello/hello_page.dart b/lib/page/hello/hello_page.dart
+index 9fc2891..dd1547a 100644
+--- a/lib/page/hello/hello_page.dart
++++ b/lib/page/hello/hello_page.dart
+@@ -174,7 +174,10 @@ class _HelloPageState extends State<HelloPage> {
+             },
+             destinations: <NavigationRailDestination>[
+               NavigationRailDestination(
+-                icon: Icon(Icons.home),
++                icon: GestureDetector(
++                  onLongPress: _toggleR18Only,
++                  child: Icon(Icons.home),
++                ),
+                 label: Text(I18n.of(context).home),
+               ),
+               NavigationRailDestination(
+@@ -231,48 +234,78 @@ class _HelloPageState extends State<HelloPage> {
+     ];
+   }
+ 
++  /// 长按底栏「首页」切换「仅 R-18」模式
++  void _toggleR18Only() {
++    final next = !userSetting.r18Only;
++    userSetting.setR18Only(next);
++    HapticUtil.medium();
++    if (this.index != 0) {
++      if (_pageController.hasClients) _pageController.jumpToPage(0);
++      setState(() {
++        this.index = 0;
++      });
++    }
++    final messenger = ScaffoldMessenger.maybeOf(context);
++    messenger?.hideCurrentSnackBar();
++    messenger?.showSnackBar(
++      SnackBar(
++        content: Text(next ? "仅 R-18：已开启" : "仅 R-18：已关闭"),
++        duration: const Duration(seconds: 1),
++        behavior: SnackBarBehavior.floating,
++      ),
++    );
++  }
++
+   Widget _buildNavigationBar(BuildContext context) {
++    final slotWidth = MediaQuery.of(context).size.width / 5;
+     return ClipRRect(
+       child: BackdropFilter(
+         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+-        child: NavigationBar(
+-          height: 68,
+-          backgroundColor: Theme.of(
+-            context,
+-          ).colorScheme.surface.withValues(alpha: 0.9),
+-          destinations: [
+-            NavigationDestination(
+-              icon: Icon(Icons.home),
+-              label: I18n.of(context).home,
+-            ),
+-            NavigationDestination(
+-              icon: Icon(Icons.leaderboard),
+-              label: I18n.of(context).rank,
+-            ),
+-            NavigationDestination(
+-              icon: Icon(Icons.favorite),
+-              label: I18n.of(context).quick_view,
+-            ),
+-            NavigationDestination(
+-              icon: Icon(Icons.search),
+-              label: I18n.of(context).search,
+-            ),
+-            NavigationDestination(
+-              icon: Icon(Icons.more_horiz),
+-              label: I18n.of(context).more,
+-            ),
+-          ],
+-          selectedIndex: index,
+-          onDestinationSelected: (value) {
+-            HapticUtil.selectionClick();
+-            if (this.index == value) {
+-              topStore.setTop("${value + 1}00");
+-            }
+-            setState(() {
+-              this.index = value;
+-            });
+-            if (_pageController.hasClients) _pageController.jumpToPage(value);
++        child: GestureDetector(
++          behavior: HitTestBehavior.translucent,
++          onLongPressStart: (details) {
++            // 长按底栏第一格（首页 tab）切换「仅 R-18」
++            if (details.localPosition.dx < slotWidth) _toggleR18Only();
+           },
++          child: NavigationBar(
++            height: 68,
++            backgroundColor: Theme.of(
++              context,
++            ).colorScheme.surface.withValues(alpha: 0.9),
++            destinations: [
++              NavigationDestination(
++                icon: Icon(Icons.home),
++                label: I18n.of(context).home,
++              ),
++              NavigationDestination(
++                icon: Icon(Icons.leaderboard),
++                label: I18n.of(context).rank,
++              ),
++              NavigationDestination(
++                icon: Icon(Icons.favorite),
++                label: I18n.of(context).quick_view,
++              ),
++              NavigationDestination(
++                icon: Icon(Icons.search),
++                label: I18n.of(context).search,
++              ),
++              NavigationDestination(
++                icon: Icon(Icons.more_horiz),
++                label: I18n.of(context).more,
++              ),
++            ],
++            selectedIndex: index,
++            onDestinationSelected: (value) {
++              HapticUtil.selectionClick();
++              if (this.index == value) {
++                topStore.setTop("${value + 1}00");
++              }
++              setState(() {
++                this.index = value;
++              });
++              if (_pageController.hasClients) _pageController.jumpToPage(value);
++            },
++          ),
+         ),
+       ),
+     );
 diff --git a/lib/page/hello/recom/recom_spotlight_page.dart b/lib/page/hello/recom/recom_spotlight_page.dart
-index 6ddd10d0..dbc56204 100644
+index 6ddd10d..a091aad 100644
 --- a/lib/page/hello/recom/recom_spotlight_page.dart
 +++ b/lib/page/hello/recom/recom_spotlight_page.dart
-@@ -71,6 +71,7 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
+@@ -20,6 +20,7 @@ import 'dart:math';
+ 
+ import 'package:easy_refresh/easy_refresh.dart';
+ import 'package:material_ui/material_ui.dart';
++import 'package:mobx/mobx.dart';
+ import 'package:flutter_mobx/flutter_mobx.dart';
+ import 'package:pixez/component/illust_card.dart';
+ import 'package:pixez/component/pixez_default_header.dart';
+@@ -49,11 +50,13 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
+   late LightingStore _lightingStore;
+   late RecomUserStore _recomUserStore;
+   late StreamSubscription<String> subscription;
++  late void Function() _r18Reaction;
+   late EasyRefreshController _easyRefreshController;
+   late ScrollController _scrollController;
+ 
+   @override
+   void dispose() {
++    _r18Reaction();
+     subscription.cancel();
+     _scrollController.dispose();
+     _easyRefreshController.dispose();
+@@ -71,6 +74,21 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
        ApiForceSource(
            futureGet: (e) => apiClient.getRecommend(), glanceKey: "recom"),
      )..easyRefreshController = _easyRefreshController;
 +    _lightingStore.r18Only = userSetting.r18Only;
++    // 长按底栏「首页」切换 r18Only 后，这里同步过滤并重载推荐流
++    _r18Reaction = reaction<bool>((_) => userSetting.r18Only, (value) {
++      if (!mounted || _lightingStore.r18Only == value) return;
++      _lightingStore.r18Only = value;
++      _lightingStore.iStores.clear();
++      _lightingStore.fetch(force: true).then((ok) {
++        if (!ok) {
++          Future<void>.delayed(const Duration(milliseconds: 400), () {
++            if (!mounted || !_lightingStore.r18Only) return;
++            _lightingStore.fetch(force: true);
++          });
++        }
++      });
++    });
      super.initState();
      subscription = topStore.topStream.listen((event) {
        if (event == "100") {
-@@ -85,6 +86,54 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
-     _recomUserStore.fetch();
-   }
- 
-+  Widget _buildR18Switch(BuildContext context) {
-+    return Observer(
-+      builder: (context) {
-+        final on = userSetting.r18Only;
-+        final primary = Theme.of(context).colorScheme.primary;
-+        final onColor = Theme.of(context).colorScheme.onPrimary;
-+        return Padding(
-+          padding: const EdgeInsets.only(right: 12.0),
-+          child: Center(
-+            child: InkWell(
-+              borderRadius: BorderRadius.circular(20.0),
-+              onTap: _toggleR18Only,
-+              child: Container(
-+                padding:
-+                    const EdgeInsets.symmetric(horizontal: 12.0, vertical: 5.0),
-+                decoration: BoxDecoration(
-+                  color: on ? primary : Colors.transparent,
-+                  borderRadius: BorderRadius.circular(20.0),
-+                  border: Border.all(
-+                    color: on ? primary : Theme.of(context).dividerColor,
-+                  ),
-+                ),
-+                child: Text(
-+                  "仅 R-18",
-+                  style: TextStyle(
-+                    fontSize: 12.0,
-+                    fontWeight: FontWeight.w600,
-+                    color: on
-+                        ? onColor
-+                        : Theme.of(context).textTheme.bodySmall?.color,
-+                  ),
-+                ),
-+              ),
-+            ),
-+          ),
-+        );
-+      },
-+    );
-+  }
-+
-+  void _toggleR18Only() {
-+    final next = !userSetting.r18Only;
-+    userSetting.setR18Only(next);
-+    _lightingStore.r18Only = next;
-+    _lightingStore.iStores.clear();
-+    _lightingStore.fetch(force: true);
-+  }
-+
-   @override
-   Widget build(BuildContext context) {
-     super.build(context);
-@@ -104,6 +153,7 @@ class _RecomSpolightPageState extends State<RecomSpolightPage>
-               automaticallyImplyLeading: false,
-               // backgroundColor: Theme.of(context).canvasColor,
-               title: Text(""),
-+              actions: [_buildR18Switch(context)],
-             )
-           ],
-           body: ListView(),
 diff --git a/lib/store/user_setting.dart b/lib/store/user_setting.dart
-index d30ba3c9..22ee8036 100644
+index d30ba3c..22ee803 100644
 --- a/lib/store/user_setting.dart
 +++ b/lib/store/user_setting.dart
 @@ -167,6 +167,9 @@ abstract class _UserSetting with Store {
