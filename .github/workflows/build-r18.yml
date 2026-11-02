@@ -138,7 +138,7 @@ jobs:
           grep -q 'android.builder.sdkDownload' android/gradle.properties 2>/dev/null \
             || echo "android.builder.sdkDownload=true" >> android/gradle.properties
           flutter pub get
-          # rhttp 是 path 依赖，其 freezed 代码必须在本包内单独生成，否则 build_runner 不会处理
+          # rhttp is a path dependency: its codegen must be generated inside the plugin package first
           ( cd plugins/rhttp/rhttp && dart run build_runner build )
           dart run build_runner build
           if [ -f android/key.properties ]; then
@@ -154,10 +154,25 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          APKS=$(find src -maxdepth 6 -name "*.apk" | tr '\n' ' ')
+          rm -rf dist && mkdir -p dist
+          add_apk() {
+            b=$(basename "$1")
+            [ -f "dist/$b" ] && return 0
+            cp -f "$1" "dist/$b"
+          }
+          # prefer apk/release (universal + abi splits), fallback to flutter-apk, dedupe by basename
+          if [ -d src/build/app/outputs/apk/release ]; then
+            find src/build/app/outputs/apk/release -maxdepth 1 -name '*.apk' -print0 2>/dev/null \
+              | while IFS= read -r -d '' f; do add_apk "$f"; done || true
+          fi
+          find src -maxdepth 6 -name '*.apk' -print0 2>/dev/null \
+            | while IFS= read -r -d '' f; do add_apk "$f"; done || true
+          ls -l dist
+          APKS=$(find dist -maxdepth 1 -name '*.apk' | sort | tr '\n' ' ')
           echo "apks: $APKS"
           [ -z "$APKS" ] && { echo "::error::no apk produced"; exit 1; }
           gh release delete "$VERSION" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          sleep 3
           gh release create "$VERSION" $APKS \
             --repo "$GITHUB_REPOSITORY" \
             --title "PixEz $VERSION (R18)" \
