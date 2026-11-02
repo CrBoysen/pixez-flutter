@@ -187,25 +187,78 @@ index d323193..eea7266 100644
              Visibility(
                visible: false,
 diff --git a/lib/page/hello/hello_page.dart b/lib/page/hello/hello_page.dart
-index 9fc2891..dd1547a 100644
+index 9fc2891..d0a6a16 100644
 --- a/lib/page/hello/hello_page.dart
 +++ b/lib/page/hello/hello_page.dart
-@@ -174,7 +174,10 @@ class _HelloPageState extends State<HelloPage> {
+@@ -46,9 +46,13 @@ class _HelloPageState extends State<HelloPage> {
+   late PageController _pageController;
+   double? bottomNavigatorHeight = null;
+   late List<Widget> _lists;
++  Timer? _r18LongPressTimer;
++  Offset? _r18DownPos;
++  bool _r18LongPressFired = false;
+ 
+   @override
+   void dispose() {
++    _r18LongPressTimer?.cancel();
+     _sub.cancel();
+     _pageController.dispose();
+     super.dispose();
+@@ -174,7 +178,7 @@ class _HelloPageState extends State<HelloPage> {
              },
              destinations: <NavigationRailDestination>[
                NavigationRailDestination(
 -                icon: Icon(Icons.home),
-+                icon: GestureDetector(
-+                  onLongPress: _toggleR18Only,
-+                  child: Icon(Icons.home),
-+                ),
++                icon: _wrapR18LongPress(child: Icon(Icons.home)),
                  label: Text(I18n.of(context).home),
                ),
                NavigationRailDestination(
-@@ -231,48 +234,78 @@ class _HelloPageState extends State<HelloPage> {
+@@ -231,48 +235,115 @@ class _HelloPageState extends State<HelloPage> {
      ];
    }
  
++  /// NavigationBar / NavigationRail 内部的 InkResponse 会在手势竞技场里抢走
++  /// 长按（Tooltip/InkResponse 的 LongPressGestureRecognizer 先于外层注册），
++  /// 外层 GestureDetector.onLongPress 收不到回调，因此改用 Listener + Timer
++  /// 直接监听原始指针事件，绕开竞技场。
++  Widget _wrapR18LongPress({required Widget child, bool firstSlotOnly = false}) {
++    return Listener(
++      behavior: HitTestBehavior.translucent,
++      onPointerDown: (event) {
++        _r18LongPressTimer?.cancel();
++        _r18LongPressTimer = null;
++        _r18LongPressFired = false;
++        _r18DownPos = event.localPosition;
++        if (firstSlotOnly) {
++          final slotWidth = MediaQuery.of(context).size.width / 5;
++          if (event.localPosition.dx > slotWidth) return;
++        }
++        _r18LongPressTimer = Timer(const Duration(milliseconds: 450), () {
++          _r18LongPressTimer = null;
++          if (!mounted || _r18LongPressFired) return;
++          _r18LongPressFired = true;
++          _toggleR18Only();
++        });
++      },
++      onPointerMove: (event) {
++        final downPos = _r18DownPos;
++        if (downPos != null && (event.localPosition - downPos).distance > 24) {
++          _r18LongPressTimer?.cancel();
++          _r18LongPressTimer = null;
++        }
++      },
++      onPointerUp: (_) => _cancelR18LongPress(),
++      onPointerCancel: (_) => _cancelR18LongPress(),
++      child: child,
++    );
++  }
++
++  void _cancelR18LongPress() {
++    _r18LongPressTimer?.cancel();
++    _r18LongPressTimer = null;
++    _r18DownPos = null;
++  }
++
 +  /// 长按底栏「首页」切换「仅 R-18」模式
 +  void _toggleR18Only() {
 +    final next = !userSetting.r18Only;
@@ -222,14 +275,13 @@ index 9fc2891..dd1547a 100644
 +    messenger?.showSnackBar(
 +      SnackBar(
 +        content: Text(next ? "仅 R-18：已开启" : "仅 R-18：已关闭"),
-+        duration: const Duration(seconds: 1),
++        duration: const Duration(seconds: 2),
 +        behavior: SnackBarBehavior.floating,
 +      ),
 +    );
 +  }
 +
    Widget _buildNavigationBar(BuildContext context) {
-+    final slotWidth = MediaQuery.of(context).size.width / 5;
      return ClipRRect(
        child: BackdropFilter(
          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -270,12 +322,9 @@ index 9fc2891..dd1547a 100644
 -              this.index = value;
 -            });
 -            if (_pageController.hasClients) _pageController.jumpToPage(value);
-+        child: GestureDetector(
-+          behavior: HitTestBehavior.translucent,
-+          onLongPressStart: (details) {
-+            // 长按底栏第一格（首页 tab）切换「仅 R-18」
-+            if (details.localPosition.dx < slotWidth) _toggleR18Only();
-           },
+-          },
++        child: _wrapR18LongPress(
++          firstSlotOnly: true,
 +          child: NavigationBar(
 +            height: 68,
 +            backgroundColor: Theme.of(
