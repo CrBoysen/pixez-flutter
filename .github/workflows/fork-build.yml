@@ -152,8 +152,11 @@ jobs:
           echo "VERSION_NAME=$NAME" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$CODE" >> "$GITHUB_ENV"
           echo "构建 $NAME ($CODE)"
-          flutter build apk --release --split-per-abi \
-            --build-name="$NAME" --build-number="$CODE"
+          # 上游把版本号写死在 build.gradle.kts 里，--build-name / --build-number 会被它盖掉
+          # （实测 APK 里仍是上游的 10012140），所以走注入的环境变量。
+          export FORK_VERSION_CODE="$CODE"
+          export FORK_VERSION_NAME="$NAME"
+          flutter build apk --release --split-per-abi
 
       - name: 生成修改说明（GPL 源码披露）
         run: |

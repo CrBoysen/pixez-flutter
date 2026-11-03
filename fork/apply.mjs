@@ -68,6 +68,22 @@ function replaceOnce(file, from, to, label, mark) {
   steps.push(`注入: ${label}`);
 }
 
+/** 用正则替换第一次出现的匹配；该处标记已存在则跳过 */
+function replaceRegexOnce(file, re, replacer, label, mark) {
+  const src = read(file);
+  if (src === null) return;
+  if (src.includes(mark)) {
+    steps.push(`已就位: ${label}`);
+    return;
+  }
+  if (!re.test(src)) {
+    problems.push(`锚点丢失: ${file} 匹配不到 ${re}（${label}）`);
+    return;
+  }
+  write(file, src.replace(re, replacer));
+  steps.push(`注入: ${label}`);
+}
+
 // 1. 落地定制源码
 const customSrc = path.join(HERE, 'lib', 'custom', 'r18_only_feed.dart');
 const customDst = path.join(ROOT, 'lib', 'custom', 'r18_only_feed.dart');
@@ -130,6 +146,28 @@ replaceOnce(
 );
 
 
+// 4. 版本号
+//    上游在 build.gradle.kts 里把 versionCode / versionName 写死了，
+//    `flutter build --build-number` 传进来的值会被它直接盖掉（实测 APK 里仍是上游的数字）。
+//    这里改成「CI 给了就用 CI 的，没给就退回上游原值」，用正则匹配而不是固定数字，
+//    这样上游下次改版本号也不会让锚点失效。
+replaceRegexOnce(
+  'android/app/build.gradle.kts',
+  /versionCode = (\d+)/,
+  (m, p1) =>
+    `versionCode = (System.getenv("FORK_VERSION_CODE") ?: "${p1}").toInt() // MARK:R18ONLY-VC`,
+  '构建: versionCode 允许 CI 覆盖',
+  'MARK:R18ONLY-VC',
+);
+
+replaceRegexOnce(
+  'android/app/build.gradle.kts',
+  /versionName = "([^"]*)"/,
+  (m, p1) => `versionName = (System.getenv("FORK_VERSION_NAME") ?: "${p1}") // MARK:R18ONLY-VN`,
+  '构建: versionName 允许 CI 覆盖',
+  'MARK:R18ONLY-VN',
+);
+
 // ------------------------------------------------------------------ 结果
 for (const s of steps) console.log('  ' + s);
 
@@ -142,12 +180,15 @@ if (problems.length) {
 
 const lighting = fs.readFileSync(path.join(ROOT, 'lib/lighting/lighting_store.dart'), 'utf8');
 const home = fs.readFileSync(path.join(ROOT, 'lib/page/hello/recom/recom_spotlight_page.dart'), 'utf8');
+const gradle = fs.readFileSync(path.join(ROOT, 'android/app/build.gradle.kts'), 'utf8');
 const checks = [
   ['定制源码存在', fs.existsSync(customDst)],
   ['fetch 接管点就位', lighting.includes('interceptFetch(this)')],
   ['fetchNext 接管点就位', lighting.includes('interceptNext(this)')],
   ['首页开关就位', home.includes('const R18OnlyBar()')],
   ['未使用旧浮层方案', !home.includes('R18OnlyToggle')],
+  ['versionCode 可被 CI 覆盖', gradle.includes('MARK:R18ONLY-VC')],
+  ['versionName 可被 CI 覆盖', gradle.includes('MARK:R18ONLY-VN')],
 ];
 let bad = 0;
 for (const [name, ok] of checks) {
