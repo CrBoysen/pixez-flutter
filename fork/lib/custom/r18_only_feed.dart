@@ -14,7 +14,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:easy_refresh/easy_refresh.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:pixez/er/prefer.dart';
 import 'package:pixez/main.dart';
 import 'package:pixez/models/illust.dart';
@@ -187,7 +187,8 @@ class R18OnlyFeed {
     return null;
   }
 
-  static bool _isR18(Map<String, dynamic> j) {    final x = j['x_restrict'];
+  static bool _isR18(Map<String, dynamic> j) {
+    final x = j['x_restrict'];
     if (x is num && x > 0) return true;
     final tags = j['tags'];
     if (tags is List) {
@@ -328,42 +329,104 @@ class R18OnlyFeed {
   }
 }
 
-/// 首页右上角的开关
-class R18OnlyToggle extends StatefulWidget {
-  const R18OnlyToggle({super.key});
+/// 首页顶部的模式切换条：「推荐」/「仅 R-18」
+///
+/// 为什么不做浮层胶囊、也不做长按手势（上一版三个方案都失败的真实原因）：
+///   1. 右上角已被占用：首页第一行右侧就是 Spotlight 的「更多」按钮
+///      （recom_spotlight_page.dart 的 _buildFirstRow），而上面的 SliverAppBar
+///      标题为空、背景色被注释掉（透明），任何浮层都会和它叠在同一块像素上。
+///   2. 右下角也被占用：HelloPage 的 Scaffold 是 extendBody: true，
+///      NavigationBar 高 68 且第 5 项就是「更多」，浮层不是压住导航栏就是盖住卡片。
+///   3. 长按更不可行：卡片自身已用 onLongPress 做「长按保存」（illust_card.dart），
+///      外层还有 PageView 横滑和 EasyRefresh 滚动，手势必然互相吞。
+///
+/// 所以：把它做成内容流里的第一行（不是浮层），遮挡、手势、安全区三个问题一次性消失。
+class R18OnlyBar extends StatefulWidget {
+  const R18OnlyBar({super.key});
 
   @override
-  State<R18OnlyToggle> createState() => _R18OnlyToggleState();
+  State<R18OnlyBar> createState() => _R18OnlyBarState();
 }
 
-class _R18OnlyToggleState extends State<R18OnlyToggle> {
+class _R18OnlyBarState extends State<R18OnlyBar> {
   bool _busy = false;
+
+  Future<void> _switch(bool value) async {
+    if (_busy || R18OnlyFeed.enabled == value) return;
+    setState(() => _busy = true);
+    await R18OnlyFeed.setEnabled(value);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(value ? '已切到「仅 R-18」：内容来自你的收藏' : '已恢复常规推荐'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final on = R18OnlyFeed.enabled;
-    return IconButton(
-      tooltip: on ? '仅 R-18：已开启' : '仅 R-18：已关闭',
-      icon: Icon(
-        on ? Icons.visibility : Icons.visibility_off_outlined,
-        color: on ? Theme.of(context).colorScheme.primary : null,
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 10),
+      child: Opacity(
+        opacity: _busy ? 0.55 : 1,
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(19),
+          ),
+          child: Row(
+            children: <Widget>[
+              _segment(context, '推荐', !on, () => _switch(false)),
+              _segment(context, '仅 R-18', on, () => _switch(true)),
+            ],
+          ),
+        ),
       ),
-      onPressed: _busy
-          ? null
-          : () async {
-              setState(() => _busy = true);
-              await R18OnlyFeed.setEnabled(!on);
-              if (mounted) setState(() => _busy = false);
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    R18OnlyFeed.enabled ? '已开启「仅 R-18」个性化首页' : '已恢复常规推荐',
-                  ),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            },
+    );
+  }
+
+  Widget _segment(
+    BuildContext context,
+    String label,
+    bool active,
+    VoidCallback onTap,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: active,
+        label: label,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: active ? scheme.primary : const Color(0x00000000),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: active
+                    ? scheme.onPrimary
+                    : scheme.primary.withValues(alpha: 0.75),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
+

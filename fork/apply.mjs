@@ -51,6 +51,23 @@ function injectAfter(file, anchor, code, label, mark) {
   steps.push(`注入: ${label}`);
 }
 
+/** 把 from 原地替换成 to；该处标记已存在则跳过 */
+function replaceOnce(file, from, to, label, mark) {
+  const src = read(file);
+  if (src === null) return;
+  if (src.includes(mark)) {
+    steps.push(`已就位: ${label}`);
+    return;
+  }
+  const idx = src.indexOf(from);
+  if (idx === -1) {
+    problems.push(`锚点丢失: ${file} 找不到 «${from.trim()}»（${label}）`);
+    return;
+  }
+  write(file, src.slice(0, idx) + to + src.slice(idx + from.length));
+  steps.push(`注入: ${label}`);
+}
+
 // 1. 落地定制源码
 const customSrc = path.join(HERE, 'lib', 'custom', 'r18_only_feed.dart');
 const customDst = path.join(ROOT, 'lib', 'custom', 'r18_only_feed.dart');
@@ -88,6 +105,8 @@ injectAfter(
 );
 
 // 3. 首页开关入口
+//    不放进 SliverAppBar.actions —— 那里是透明空壳，正下方紧邻 Spotlight 的「更多」按钮，
+//    浮层必然和它叠在一起。改成插进内容流第一行，随列表滚动的普通一行，不遮挡任何东西。
 injectAfter(
   'lib/page/hello/recom/recom_spotlight_page.dart',
   "import 'package:pixez/lighting/lighting_store.dart';",
@@ -96,13 +115,20 @@ injectAfter(
   'MARK:R18ONLY-IMPORT-HOME',
 );
 
-injectAfter(
+replaceOnce(
   'lib/page/hello/recom/recom_spotlight_page.dart',
-  '              automaticallyImplyLeading: false,',
-  '\n              actions: const [R18OnlyToggle()], // MARK:R18ONLY-ACTION',
-  '首页: 右上角开关按钮',
-  'MARK:R18ONLY-ACTION',
+  '            child: Container(height: MediaQuery.of(context).padding.top),',
+  '            child: Column(\n' +
+    '              mainAxisSize: MainAxisSize.min,\n' +
+    '              children: [\n' +
+    '                Container(height: MediaQuery.of(context).padding.top),\n' +
+    '                const R18OnlyBar(),\n' +
+    '              ],\n' +
+    '            ), // MARK:R18ONLY-BAR',
+  '首页: 顶部模式切换条',
+  'MARK:R18ONLY-BAR',
 );
+
 
 // ------------------------------------------------------------------ 结果
 for (const s of steps) console.log('  ' + s);
@@ -120,7 +146,8 @@ const checks = [
   ['定制源码存在', fs.existsSync(customDst)],
   ['fetch 接管点就位', lighting.includes('interceptFetch(this)')],
   ['fetchNext 接管点就位', lighting.includes('interceptNext(this)')],
-  ['首页开关就位', home.includes('R18OnlyToggle()')],
+  ['首页开关就位', home.includes('const R18OnlyBar()')],
+  ['未使用旧浮层方案', !home.includes('R18OnlyToggle')],
 ];
 let bad = 0;
 for (const [name, ok] of checks) {
