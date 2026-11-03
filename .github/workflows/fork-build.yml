@@ -143,7 +143,9 @@ jobs:
 
       - name: 生成修改说明（GPL 源码披露）
         run: |
-          git diff > "$RUNNER_TEMP/applied.patch"
+          # 必须先把新文件也纳入索引，否则 lib/custom/ 这种新增文件不会出现在 diff 里
+          git add -A
+          git diff --cached > "$RUNNER_TEMP/applied.patch"
           echo "改动行数: $(wc -l < "$RUNNER_TEMP/applied.patch")"
 
       - name: 发布 Release
@@ -155,7 +157,7 @@ jobs:
           body: |
             基于上游 `${{ needs.check.outputs.upstream_tag }}` 构建（commit `${{ env.UPSTREAM_SHA }}`）。
 
-            **客户端个性化修改**：首页「仅 R-18」个性化流，右上角眼睛图标切换。
+            **客户端个性化修改**：首页顶部的「推荐 / 仅 R-18」模式切换条。
             数据源为「你收藏作品的邻居」，不是全站榜单。
 
             修改内容见附件 `applied.patch`；配方见 `custom` 分支 `fork/`。
@@ -168,5 +170,7 @@ jobs:
             build/app/outputs/flutter-apk/app-x86_64-release.apk
             ${{ runner.temp }}/applied.patch
 
-      - name: 同步 master 镜像
-        run: git push origin "$UPSTREAM_SHA":master --force
+      # 不再在这里 force push master 做镜像同步：
+      # 前面是 --depth=1 的浅克隆，把浅提交强推到 master 会因为缺少父提交对象而失败，
+      # 一次失败就会把「构建成功 + 已发版」的运行标记成红色，反而误导人。
+      # master 保持为手动对齐的干净快照，构建永远直接用上游当次 SHA，不依赖它。
