@@ -110,7 +110,7 @@ jobs:
         run: node fork/apply.mjs
 
       - name: 静态检查定制代码
-        run: dart analyze --no-fatal-warnings --no-fatal-infos lib/custom/r18_only_feed.dart
+        run: dart analyze --no-fatal-warnings lib/custom/r18_only_feed.dart
 
       - name: 恢复签名密钥
         env:
